@@ -2,8 +2,13 @@
 #Ver 0.0.0　作成開始git 
 #BMP280使用
 
+
 import smbus2
 import bme280
+import datetime
+import pymysql.cursors
+
+
 
 port = 1
 BMP280address = 0x76
