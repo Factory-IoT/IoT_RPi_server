@@ -1,32 +1,46 @@
 #M5StickC - RPi wifi
 #Ver 0.0.0　作成開始git 
 #Ver 1.0.0  m5stick加速度、BMP280環境データ測定
+#Ver 1.1.0 library をadafruiteに変更、analog class追加、空圧測定追加
+#Ver 1.1.1 いろいろ修正。テーブルテスト完了
 
-import subprocess
-import serial
-import smbus2
-import bme280
 import pymysql.cursors
 import signal
 import time
 import datetime
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+import adafruit_bme280
+import serial
+import subprocess
+
+#i2c 設定
+i2c = busio.I2C(board.SCL,board.SDA)
+
+#bme280 インスタンス
+bme280 = adafruit_bme280.Adafruit_BME280_I2C(board.I2C(),address = 0x76)
+
+#ADS1115 インスタンス ADS0 24V系 P0:チラー流量 P1:チラー温度 P2:未使用 P3:未使用
+#ADS1115 インスタンス ADS1 24V系 P0:エア圧 P1-3:未使用
+ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
+WaterFlow1 = AnalogIn(ADS0,ADS.P0)
+WaterTemp1 = AnalogIn(ADS0,ADS.P1)
+ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
+AirPress1 = AnalogIn(ADS1,ADS.P0) 
 
 timesecond = 60 #測定間隔(sec)
 AccelFreq  = 60 #加速度記録の頻度
 
-BT = True                               #Bluetooth接続モード On:True Off:False
+BT = False                               #Bluetooth接続モード On:True Off:False
 #MAC_ADDRESS = "D8:A0:1D:55:27:7A"
 MAC_ADDRESS = "94:B9:7E:8C:64:CA"
 
-#if BT == True:
-#    res = subprocess.check_call(["sudo","rfcomm","bind","1", MAC_ADDRESS])
-#    ser=serial.Serial("/dev/rfcomm1",115200,timeout=2.0)
-#    ser.close()
-
-#I2C init
-port = 1
-BMP280address = 0x76
-bus = smbus2.SMBus(port)
+if BT == True:
+    res = subprocess.check_call(["sudo","rfcomm","bind","1", MAC_ADDRESS])
+    ser=serial.Serial("/dev/rfcomm1",115200,timeout=2.0)
+    ser.close()
 
 #DB init
 connection  = pymysql.connect(
@@ -38,19 +52,20 @@ connection  = pymysql.connect(
     charset = "utf8mb4",
     )
     
-
-
 class DB:
     def __init__(self):
-        print("init")
+        print("DB init")
         self.count = 1
-    def write(self):
+    def Write(self):
         print("db write")
         TimeStamp = str(datetime.datetime.now())
         connection.ping(reconnect = True)
         cur = connection.cursor()
-        cur.execute("INSERT INTO Environment (Time,AtmTemp,AtmHum,AtmPress) VALUES(%s,%s,%s,%s)",
-            (TimeStamp,BMP280.Temp,BMP280.Hum,BMP280.Press))
+        cur.execute("INSERT INTO Environment (Time,Temp,Hum,Press) VALUES(%s,%s,%s,%s)",
+            (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press))
+        cur.execute("INSERT INTO Air (Time,Press) VALUES(%s,%s)",(Air.TimeStamp,Air.Press))
+        cur.execute("INSERT INTO Water (Time,ChillFlow,ChillTemp) VALUES(%s,%s,%s)",(Water.TimeStamp,Water.ChillFlow,Water.ChillTemp))
+
         #connection.commit()
         if(self.count % AccelFreq == 0):
             self.count = 1
@@ -62,33 +77,43 @@ class DB:
                     (TimeStamp,Accel.samplingTime[i],Accel.ax[i],Accel.ay[i],Accel.az[i])) 
                 #connection.commit()
 #        print(self.count)
-        self.count += 1
+
+        self.count += 1 #加速度測定頻度管理用カウンタ
 
         connection.commit()
 
-class BMP280:
+class BME280:
     def __init__(self):
-        self.BMP280calibration_params = bme280.load_calibration_params(bus, BMP280address)
-        self.EnvData = bme280.sample(bus, BMP280address,self.BMP280calibration_params)
+        self.TimeStamp = datetime.datetime.now()
         self.Temp  = 0.0
-        self.press = 0.0
+        self.Press = 0.0
         self.Hum   = 0.0
 
-        #print(EnvData.timestamp)
-        #print("temperature : %s *C" % str(round(EnvData.temperature,1)))
-        #print("pressure    : %s %%" % str(round(EnvData.pressure,1)))
-        #print("humidity    : %s hPa" % str(round(EnvData.humidity,1)))
-        print(self.EnvData)
+    def Read(self):
+        self.TimeStamp = datetime.datetime.now()
+        self.Temp = round(bme280.temperature,2)
+        self.Press = round(bme280.pressure,2)
+        self.Hum = round(bme280.relative_humidity,2)
 
-    def get(self):
-        print("get")
-        self.EnvData = bme280.sample(bus, BMP280address,self.BMP280calibration_params)
-        self.Temp = round(self.EnvData.temperature,1)
-        self.Press = round(self.EnvData.pressure,1)
-        self.Hum = round(self.EnvData.humidity,1)
-        print(self.EnvData)
+class Water:
+    def __init__(self):
+        self.TimeStamp = datetime.datetime.now()
+        self.ChillFlow = round(WaterFlow1.voltage * 208.33333 - 125,2)
+        self.ChillTemp = round(WaterTemp1.voltage * 58.33333 - 55,2)
 
+    def Read(self):
+        self.TimeStamp = datetime.datetime.now()
+        self.ChillFlow = round(WaterFlow1.voltage * 208.33333 - 125,2)
+        self.ChillTemp = round(WaterTemp1.voltage * 58.33333 - 55,2)
 
+class Air:
+    def __init__(self):
+        self.TimeStamp = datetime.datetime.now()
+        self.Press = round((AirPress1.voltage * 1.524796) * 0.25 - 0.25, 2)
+    def Read(self):
+        self.TimeStamp = datetime.datetime.now()
+        self.Press = round(AirPress1.voltage * 1.524796 * 0.25 - 0.25, 2)
+    
 class Accel:
     def __init__(self):
         self.samplingTime = []
@@ -103,13 +128,14 @@ class Accel:
         self.mesureNum = 0
         self.sampleSize = 0
 
-    def get(self):
+    def Read(self):
         if BT ==True:
             sampleSizeRaw = b''
             try:
                 res = subprocess.check_call(["sudo","rfcomm","bind","1", MAC_ADDRESS])
                 ser = serial.Serial("/dev/rfcomm1",115200,timeout=2.0)
                 ser.reset_input_buffer()
+
                 ser.reset_output_buffer()
                 print("send check code")
                 BTCommand = 1
@@ -171,24 +197,43 @@ class Accel:
 #                ser=serial.Serial("/dev/rfcomm1",115200,timeout=2.0)
 
 
+def printData():
+    BME280.Read()
+    Air.Read()
+    Water.Read()
+    print("==========================================")
+    print("Env TimeStamp   : %s" % BME280.TimeStamp)
+    print("Env Temp        : %0.2f" % BME280.Temp)
+    print("Env Hum         : %0.2f" % BME280.Hum)
+    print("Env Press       : %0.2f" % BME280.Press)
+
+    print("Air TimeStamp   : %s" % Air.TimeStamp)
+    print("Air Press       : %0.2f" % Air.Press)
+
+    print("Chill TimeStamp : %s" % Water.TimeStamp)
+    print("Chill Flow      : %0.2f" % Water.ChillFlow)
+    print("Chill Temp      : %0.2f" % Water.ChillTemp)
+
 
 #setup
-BMP280 = BMP280()
+BME280 = BME280()
+Water = Water()
+Air = Air()
 Accel = Accel()
 DB = DB()
 
 def task(arg1,args2):
-    print(datetime.datetime.now())
-    BMP280.get()
-    print(datetime.datetime.now())
-    Accel.get()
-    print(datetime.datetime.now())
-    DB.write()
+    BME280.Read()
+    Air.Read()
+    Water.Read()
+#    Accel.Read()
+
+    DB.Write()
     time.sleep(1)
 
 signal.signal(signal.SIGALRM,task)
 signal.setitimer(signal.ITIMER_REAL,1,timesecond)
 
 while True:
-    print(time.time())
+    printData()
     time.sleep(10)
