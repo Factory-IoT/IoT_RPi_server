@@ -6,7 +6,6 @@
 #Ver 1.2.0 M5stick C USB接続化 割り込み処理廃止 振動データ廃止、回転数データのみ採取
 
 import pymysql.cursors
-import signal
 import time
 import datetime
 import board
@@ -28,9 +27,9 @@ bme280 = adafruit_bme280.Adafruit_BME280_I2C(board.I2C(),address = 0x76)
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
 WaterFlow1 = AnalogIn(ADS0,ADS.P0)
 WaterTemp1 = AnalogIn(ADS0,ADS.P1)
-#ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
-#AirPress1 = AnalogIn(ADS1,ADS.P0) 
-AirPress1 = AnalogIn(ADS0,ADS.P2) 
+ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
+AirPress1 = AnalogIn(ADS1,ADS.P0) 
+#AirPress1 = AnalogIn(ADS0,ADS.P2) 
 
 timesecond = 5 #測定間隔(sec)   2,3,4,5,6,10,15,20,30,
 AccelFreq  = 1 #加速度記録の頻度(min) 1,2,3,4,5,6,10,12,15,20,30
