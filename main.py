@@ -5,6 +5,7 @@
 #Ver 1.1.1 いろいろ修正。テーブルテスト完了
 #Ver 1.2.0 M5stick C USB接続化 割り込み処理廃止 振動データ廃止、回転数データのみ採取
 #Ver 1.2.1 動作確認のため、analog Rawデータ記録
+#Ver 1.2.2 bme通信エラー対処
 
 import pymysql.cursors
 import time
@@ -100,10 +101,16 @@ class BME280:
         self.Hum   = 0.0
 
     def Read(self):
+        
         self.TimeStamp = datetime.datetime.now()
-        self.Temp = round(bme280.temperature,2)
-        self.Press = round(bme280.pressure,2)
-        self.Hum = round(bme280.relative_humidity,2)
+        try:
+            self.Temp = round(bme280.temperature,2)
+            self.Press = round(bme280.pressure,2)
+            self.Hum = round(bme280.relative_humidity,2)
+        except:
+            self.Temp = 9999.9999
+            self.Press = 9999.9999
+            self.Hum = 9999.9999
 
 class Water:
     def __init__(self):
@@ -114,21 +121,30 @@ class Water:
         self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
 
     def Read(self):
-        self.TimeStamp = datetime.datetime.now()
-        self.ChillFlowRaw = WaterFlow1.voltage
-        self.ChillTempRaw = WaterTemp1.voltage 
-        self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,2)
-        self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
+        try:
+            self.TimeStamp = datetime.datetime.now()
+            self.ChillFlowRaw = WaterFlow1.voltage
+            self.ChillTempRaw = WaterTemp1.voltage 
+            self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,2)
+            self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
+        except:
+            self.ChillFlow = 9999.9999
+            self.ChillTemp = 9999.9999
 
 class Air:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
-        self.PressRaw = AirPress1.voltage
-        self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 2)
+        self.PressRaw = 9999.9999
+        self.Press = 9999.9999
+
     def Read(self):
-        self.TimeStamp = datetime.datetime.now()
-        self.PressRaw = AirPress1.voltage
-        self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 2)
+        try:
+            self.TimeStamp = datetime.datetime.now()
+            self.PressRaw = AirPress1.voltage
+            self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 2)
+        except:
+            self.Press = 9999.9999
+
 
 class Motor:
     
@@ -159,6 +175,7 @@ class Motor:
             
             except:
                 print("cant open")
+                self.RPM = 9999.9999
                 return
 
 
