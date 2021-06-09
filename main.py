@@ -4,6 +4,7 @@
 #Ver 1.1.0 library をadafruiteに変更、analog class追加、空圧測定追加
 #Ver 1.1.1 いろいろ修正。テーブルテスト完了
 #Ver 1.2.0 M5stick C USB接続化 割り込み処理廃止 振動データ廃止、回転数データのみ採取
+#Ver 1.2.1 動作確認のため、analog Rawデータ記録
 
 import pymysql.cursors
 import time
@@ -12,7 +13,7 @@ import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
-import adafruit_bme280
+from adafruit_bme280 import basic
 import serial
 import subprocess
 
@@ -20,21 +21,21 @@ import subprocess
 i2c = busio.I2C(board.SCL,board.SDA)
 
 #bme280 インスタンス
-bme280 = adafruit_bme280.Adafruit_BME280_I2C(board.I2C(),address = 0x76)
+bme280 = basic.Adafruit_BME280_I2C(board.I2C(),address = 0x76)
 
 #ADS1115 インスタンス ADS0 24V系 P0:チラー流量 P1:チラー温度 P2:未使用 P3:未使用
 #ADS1115 インスタンス ADS1 24V系 P0:エア圧 P1-3:未使用
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
 WaterFlow1 = AnalogIn(ADS0,ADS.P0)
 WaterTemp1 = AnalogIn(ADS0,ADS.P1)
-ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
-AirPress1 = AnalogIn(ADS1,ADS.P0) 
-#AirPress1 = AnalogIn(ADS0,ADS.P2) 
+#ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
+#AirPress1 = AnalogIn(ADS1,ADS.P0) 
+AirPress1 = AnalogIn(ADS0,ADS.P2) 
 
 timesecond = 5 #測定間隔(sec)   2,3,4,5,6,10,15,20,30,
 AccelFreq  = 1 #加速度記録の頻度(min) 1,2,3,4,5,6,10,12,15,20,30
 
-ConnectMode = 2                          #M5StickCとの接続モード　0:None 1:BT 2:USB
+ConnectMode = 0                          #M5StickCとの接続モード　0:None 1:BT 2:USB
 #MAC_ADDRESS = "D8:A0:1D:55:27:7A"
 MAC_ADDRESS = "94:B9:7E:8C:64:CA"
 
@@ -75,9 +76,9 @@ class DB:
         connection.commit()
 
     def WriteAll(self):
- 
         cur = connection.cursor()
-        cur.execute("INSERT INTO test (Time,EnvTemp,EnvHum,EnvPress,AirPress,ChillFlow,ChillTemp,MotorRPM) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",(BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM))
+        cur.execute("INSERT INTO test (Time,EnvTemp,EnvHum,EnvPress,AirPress,ChillFlow,ChillTemp,MotorRPM,AirPressRaw,ChillFlowRaw,ChillTempRaw) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Air.PressRaw,Water.ChillFlowRaw,Water.ChillTempRaw))
         connection.commit()
 
     def WriteAccel(self):
@@ -107,54 +108,62 @@ class BME280:
 class Water:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
-        self.ChillFlow = round(WaterFlow1.voltage * 208.33333 - 125,2)
-        self.ChillTemp = round(WaterTemp1.voltage * 58.33333 - 55,2)
+        self.ChillFlowRaw = WaterFlow1.voltage
+        self.ChillTempRaw = WaterTemp1.voltage 
+        self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,2)
+        self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
 
     def Read(self):
         self.TimeStamp = datetime.datetime.now()
-        self.ChillFlow = round(WaterFlow1.voltage * 208.33333 - 125,2)
-        self.ChillTemp = round(WaterTemp1.voltage * 58.33333 - 55,2)
+        self.ChillFlowRaw = WaterFlow1.voltage
+        self.ChillTempRaw = WaterTemp1.voltage 
+        self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,2)
+        self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
 
 class Air:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
-        self.Press = round((AirPress1.voltage * 1.524796) * 0.25 - 0.25, 2)
+        self.PressRaw = AirPress1.voltage
+        self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 2)
     def Read(self):
         self.TimeStamp = datetime.datetime.now()
-        self.Press = round(AirPress1.voltage * 1.524796 * 0.25 - 0.25, 2)
+        self.PressRaw = AirPress1.voltage
+        self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 2)
 
 class Motor:
+    
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
         self.RPM = 0
         self.RPMRaw = b""
     def Read(self):
-        print("USB Read")
-        ser = serial.Serial("/dev/ttyUSB0",115200,timeout = 2.0)
-        try:
-            #前回通信時のバッファをクリア
-            ser.reset_input_buffer()
-            ser.reset_output_buffer()
+        if ConnectMode == 1:
+            print("USB Read")
+            ser = serial.Serial("/dev/ttyUSB0",115200,timeout = 2.0)
+            try:
+                #前回通信時のバッファをクリア
+                ser.reset_input_buffer()
+                ser.reset_output_buffer()
 
                 #M5StickCにコマンドを送信 1 で測定開始
-            print("send command to M5StickC")
-            Command = 1
-            CommandByte=bytes([Command])
-            ser.write(CommandByte)
-            self.RPMRaw = ser.readline()
-            print(self.RPMRaw)
-            ser.reset_input_buffer()
-            ser.reset_output_buffer()
-            ser.close()
-            print("USB connection release")
+                print("send command to M5StickC")
+                Command = 1
+                CommandByte=bytes([Command])
+                ser.write(CommandByte)
+                self.RPMRaw = ser.readline()
+                print(self.RPMRaw)
+                ser.reset_input_buffer()
+                ser.reset_output_buffer()
+                ser.close()
+                print("USB connection release")
             
-        except:
-            print("cant open")
-            return
+            except:
+                print("cant open")
+                return
 
 
-        print(self.RPMRaw)
-        self.RPM = float(repr(self.RPMRaw.decode())[1:-5])
+            print(self.RPMRaw)
+            self.RPM = float(repr(self.RPMRaw.decode())[1:-5])
         print("RPM = " + str(self.RPM))
 
 
