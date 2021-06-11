@@ -29,9 +29,9 @@ bme280 = basic.Adafruit_BME280_I2C(board.I2C(),address = 0x76)
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
 WaterFlow1 = AnalogIn(ADS0,ADS.P0)
 WaterTemp1 = AnalogIn(ADS0,ADS.P1)
-#ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
-#AirPress1 = AnalogIn(ADS1,ADS.P0) 
-AirPress1 = AnalogIn(ADS0,ADS.P2) 
+ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
+AirPress1 = AnalogIn(ADS1,ADS.P0) 
+#AirPress1 = AnalogIn(ADS0,ADS.P2) 
 
 timesecond = 5 #測定間隔(sec)   2,3,4,5,6,10,15,20,30,
 AccelFreq  = 1 #加速度記録の頻度(min) 1,2,3,4,5,6,10,12,15,20,30
@@ -334,10 +334,13 @@ def printData():
 
     print("Air TimeStamp   : %s" % Air.TimeStamp)
     print("Air Press       : %0.2f" % Air.Press)
+    print("Air Press RAW   : %0.2f" % Air.PressRaw)
 
     print("Chill TimeStamp : %s" % Water.TimeStamp)
     print("Chill Flow      : %0.2f" % Water.ChillFlow)
+    print("Chill Flow RAW  : %0.2f" % Water.ChillFlowRaw)
     print("Chill Temp      : %0.2f" % Water.ChillTemp)
+    print("Chill Temp RAW  : %0.2f" % Water.ChillTempRaw)
 
     print("Motor RPM       : %0.2f" % Motor.RPM)
 
