@@ -89,6 +89,7 @@ class DB:
 
     def WriteAll(self):
         cur = connection.cursor()
+        printData()
         cur.execute("INSERT INTO test (Time,EnvTemp,EnvHum,EnvPress,AirPress,ChillFlow,ChillTemp,MotorRPM,AirPressRaw,ChillFlowRaw,ChillTempRaw) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Air.PressRaw,Water.ChillFlowRaw,Water.ChillTempRaw))
         connection.commit()
@@ -369,8 +370,6 @@ def printData():
     except:
         print("display not found")
 
-
-
 #setup
 BME280 = BME280()
 Water = Water()
@@ -383,9 +382,6 @@ lastMesure = 0
 lastSecond = 0
 while True:
 
-#    print(datetime.datetime.now().second)
-#    print(datetime.datetime.now().second % timesecond)
-
     if (datetime.datetime.now().second % timesecond == 0) & (datetime.datetime.now().second != lastSecond):
         lastSecond = datetime.datetime.now().second
         print(datetime.datetime.now().second)
@@ -396,18 +392,8 @@ while True:
         Motor.Read()
         print(datetime.datetime.now())
         DB.WriteAll()
-        print(datetime.datetime.now())
-        printData()
-#    if (datetime.datetime.now().minute % AccelFreq == 0) & (datetime.datetime.now().minute != lastMesure):
-#        lastMesure = datetime.datetime.now().minute
-#        print(datetime.datetime.now())
-#        print("lastMesure = ", end = "")
-#        print(lastMesure)
-#        print("minute = ", end = "")
-#        print(datetime.datetime.now().minute)
-#        Accel.Read()
-#        print(datetime.datetime.now())
-#        DB.WriteAccel()
-#        print(datetime.datetime.now())
+        #print(datetime.datetime.now())
+        #printData()
+
 
     time.sleep(0.01)
