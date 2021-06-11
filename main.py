@@ -6,6 +6,7 @@
 #Ver 1.2.0 M5stick C USB接続化 割り込み処理廃止 振動データ廃止、回転数データのみ採取
 #Ver 1.2.1 動作確認のため、analog Rawデータ記録
 #Ver 1.2.2 bme通信エラー対処
+#Ver 1.2.3 ssd1306追加、自動起動追加
 
 import pymysql.cursors
 import time
@@ -17,6 +18,7 @@ from adafruit_ads1x15.analog_in import AnalogIn
 from adafruit_bme280 import basic
 import serial
 import subprocess
+import adafruit_ssd1306
 
 #i2c 設定
 i2c = busio.I2C(board.SCL,board.SDA)
@@ -24,14 +26,23 @@ i2c = busio.I2C(board.SCL,board.SDA)
 #bme280 インスタンス
 bme280 = basic.Adafruit_BME280_I2C(board.I2C(),address = 0x76)
 
+#display インスタンス
+try:
+    display = adafruit_ssd1306.SSD1306_I2C(128, 64, i2c, addr=0x3c)
+    display.fill(0)
+    display.text("initializing....",0,0,1)
+    display.show()
+except:
+    print("dhisplay not found")
+
 #ADS1115 インスタンス ADS0 24V系 P0:チラー流量 P1:チラー温度 P2:未使用 P3:未使用
 #ADS1115 インスタンス ADS1 24V系 P0:エア圧 P1-3:未使用
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
 WaterFlow1 = AnalogIn(ADS0,ADS.P0)
 WaterTemp1 = AnalogIn(ADS0,ADS.P1)
-ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
-AirPress1 = AnalogIn(ADS1,ADS.P0) 
-#AirPress1 = AnalogIn(ADS0,ADS.P2) 
+#ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
+#AirPress1 = AnalogIn(ADS1,ADS.P0) 
+AirPress1 = AnalogIn(ADS0,ADS.P2) #動作テスト用設定 テスト時は上２行をコメントアウト
 
 timesecond = 5 #測定間隔(sec)   2,3,4,5,6,10,15,20,30,
 AccelFreq  = 1 #加速度記録の頻度(min) 1,2,3,4,5,6,10,12,15,20,30
@@ -104,46 +115,46 @@ class BME280:
         
         self.TimeStamp = datetime.datetime.now()
         try:
-            self.Temp = round(bme280.temperature,2)
-            self.Press = round(bme280.pressure,2)
-            self.Hum = round(bme280.relative_humidity,2)
+            self.Temp = round(bme280.temperature,3)
+            self.Press = round(bme280.pressure,3)
+            self.Hum = round(bme280.relative_humidity,3)
         except:
-            self.Temp = 9999.9999
-            self.Press = 9999.9999
-            self.Hum = 9999.9999
+            self.Temp = 9999.999
+            self.Press = 9999.999
+            self.Hum = 9999.999
 
 class Water:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
         self.ChillFlowRaw = WaterFlow1.voltage
         self.ChillTempRaw = WaterTemp1.voltage 
-        self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,2)
-        self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
+        self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,3)
+        self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,3)
 
     def Read(self):
         try:
             self.TimeStamp = datetime.datetime.now()
             self.ChillFlowRaw = WaterFlow1.voltage
             self.ChillTempRaw = WaterTemp1.voltage 
-            self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,2)
-            self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,2)
+            self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,3)
+            self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,3)
         except:
-            self.ChillFlow = 9999.9999
-            self.ChillTemp = 9999.9999
+            self.ChillFlow = 9999.999
+            self.ChillTemp = 9999.999
 
 class Air:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
-        self.PressRaw = 9999.9999
-        self.Press = 9999.9999
+        self.PressRaw = 9999.999
+        self.Press = 9999.999
 
     def Read(self):
         try:
             self.TimeStamp = datetime.datetime.now()
             self.PressRaw = AirPress1.voltage
-            self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 2)
+            self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 3)
         except:
-            self.Press = 9999.9999
+            self.Press = 9999.999
 
 
 class Motor:
@@ -175,7 +186,7 @@ class Motor:
             
             except:
                 print("cant open")
-                self.RPM = 9999.9999
+                self.RPM = 9999.999
                 return
 
 
@@ -343,6 +354,21 @@ def printData():
     print("Chill Temp RAW  : %0.2f" % Water.ChillTempRaw)
 
     print("Motor RPM       : %0.2f" % Motor.RPM)
+
+    displaytime = str(BME280.TimeStamp.hour) + ":" + str(BME280.TimeStamp.minute) + ":" + str(BME280.TimeStamp.second)
+    display.fill(0)
+    display.text("%s" % displaytime ,0,0,1)
+    display.text("EnvTemp   : %0.2f'C" % BME280.Temp,0,12,1)
+    display.text("EnvHum    : %0.2f%%" % BME280.Hum,0,20,1)
+    display.text("EnvPress  : %0.0fHPa" % BME280.Press,0,28,1)
+    display.text("AirPress  : %0.2fMPa" % Air.Press,0,36,1)
+    display.text("ChillFlow : %0.2fL/m" % Water.ChillFlow,0,44,1)
+    display.text("ChillTemp : %0.2f'C" % Water.ChillTemp,0,52,1)
+    try:
+        display.show()
+    except:
+        print("display not found")
+
 
 
 #setup
