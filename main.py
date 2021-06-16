@@ -7,7 +7,9 @@
 #Ver 1.2.1 動作確認のため、analog Rawデータ記録
 #Ver 1.2.2 bme通信エラー対処
 #Ver 1.2.3 ssd1306追加、自動起動追加
+#Ver 1.3.0 csv出力追加
 
+from typing import ClassVar
 import pymysql.cursors
 import time
 import datetime
@@ -19,6 +21,9 @@ from adafruit_bme280 import basic
 import serial
 import subprocess
 import adafruit_ssd1306
+import csv
+
+path = "/home/pi/Workspace/Data/"
 
 #i2c 設定
 i2c = busio.I2C(board.SCL,board.SDA)
@@ -35,6 +40,8 @@ try:
 except:
     print("dhisplay not found")
 
+
+
 #ADS1115 インスタンス ADS0 24V系 P0:チラー流量 P1:チラー温度 P2:未使用 P3:未使用
 #ADS1115 インスタンス ADS1 24V系 P0:エア圧 P1-3:未使用
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
@@ -42,6 +49,7 @@ WaterFlow1 = AnalogIn(ADS0,ADS.P0)
 WaterTemp1 = AnalogIn(ADS0,ADS.P1)
 #ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
 #AirPress1 = AnalogIn(ADS1,ADS.P0) 
+#OilPress1 = AnalogIn(ADS1,ADS.P2)
 AirPress1 = AnalogIn(ADS0,ADS.P2) #動作テスト用設定 テスト時は上２行をコメントアウト
 
 timesecond = 5 #測定間隔(sec)   2,3,4,5,6,10,15,20,30,
@@ -69,13 +77,26 @@ connection  = pymysql.connect(
 #    db      = "DA755"
     charset = "utf8mb4",
     )
-    
+
+class CSV:
+
+    def __init__(self):
+        print("CSV init")
+        self.today = datetime.date
+        self.filename = str
+
+    def WriteAll(self):
+        print("CSV write")
+        with open(path + self.filename,"a") as f:
+            writer = csv.writer(f)
+            writer.writerow([BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Air.PressRaw,Water.ChillFlowRaw,Water.ChillTempRaw])
+
 class DB:
     def __init__(self):
         print("DB init")
         self.count = 1
 
-    def Write(self):
+    def WriteAll(self):
         print("db write")
 #        TimeStamp = str(datetime.datetime.now())
 #        DB.WriteAccel()
@@ -157,6 +178,19 @@ class Air:
         except:
             self.Press = 9999.999
 
+class Oil:
+    def __init__(self):
+        self.TimeStamp = datetime.datetime.now()
+        self.PressRaw = 9999.999
+        self.Press = 9999.999
+
+    def Read(self):
+        try:
+            self.TimeStamp = datetime.datetime.now()
+            self.PressRaw = AirPress1.voltage
+            self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 3)
+        except:
+            self.Press = 9999.999
 
 class Motor:
     
@@ -356,7 +390,9 @@ def printData():
 
     print("Motor RPM       : %0.2f" % Motor.RPM)
 
-    displaytime = str(BME280.TimeStamp.hour) + ":" + str(BME280.TimeStamp.minute) + ":" + str(BME280.TimeStamp.second)
+    #displaytime = str(BME280.TimeStamp.hour) + ":" + str(BME280.TimeStamp.minute) + ":" + str(BME280.TimeStamp.second)
+    displaytime = BME280.TimeStamp.strftime("%H:%M:%S")
+ 
     display.fill(0)
     display.text("%s" % displaytime ,0,0,1)
     display.text("EnvTemp   : %0.2f'C" % BME280.Temp,0,12,1)
@@ -377,10 +413,20 @@ Air = Air()
 Accel = Accel()
 DB = DB()
 Motor = Motor()
+Oil = Oil()
+CSV = CSV()
 
 lastMesure = 0
 lastSecond = 0
+
+
+
+
 while True:
+    if CSV.today != datetime.date.today():
+        CSV.today = datetime.date.today()
+        CSV.filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.csv")
+        print("savefile : " + CSV.filename)
 
     if (datetime.datetime.now().second % timesecond == 0) & (datetime.datetime.now().second != lastSecond):
         lastSecond = datetime.datetime.now().second
@@ -392,6 +438,7 @@ while True:
         Motor.Read()
         print(datetime.datetime.now())
         DB.WriteAll()
+        CSV.WriteAll()
         #print(datetime.datetime.now())
         #printData()
 
