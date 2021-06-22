@@ -9,6 +9,7 @@
 #Ver 1.2.3 ssd1306追加、自動起動追加
 #Ver 1.3.0 csv出力追加
 #ver 1.4.0 Oilpress 追加
+#ver 1.4.1 csv出力修正
 
 from typing import ClassVar
 import pymysql.cursors
@@ -90,7 +91,7 @@ class CSV:
         print("CSV write")
         with open(path + self.filename,"a") as f:
             writer = csv.writer(f)
-            writer.writerow([BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Air.PressRaw,Water.ChillFlowRaw,Water.ChillTempRaw])
+            writer.writerow([BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Oil.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Air.PressRaw,Oil.PressRaw,Water.ChillFlowRaw,Water.ChillTempRaw])
 
 class DB:
     def __init__(self):
