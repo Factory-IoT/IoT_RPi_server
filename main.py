@@ -8,6 +8,7 @@
 #Ver 1.2.2 bme通信エラー対処
 #Ver 1.2.3 ssd1306追加、自動起動追加
 #Ver 1.3.0 csv出力追加
+#ver 1.4.0 Oilpress 追加
 
 from typing import ClassVar
 import pymysql.cursors
@@ -47,10 +48,10 @@ except:
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
 WaterFlow1 = AnalogIn(ADS0,ADS.P0)
 WaterTemp1 = AnalogIn(ADS0,ADS.P1)
-#ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
-#AirPress1 = AnalogIn(ADS1,ADS.P0) 
-#OilPress1 = AnalogIn(ADS1,ADS.P2)
-AirPress1 = AnalogIn(ADS0,ADS.P2) #動作テスト用設定 テスト時は上２行をコメントアウト
+ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
+AirPress1 = AnalogIn(ADS1,ADS.P0) 
+OilPress1 = AnalogIn(ADS1,ADS.P2)
+#AirPress1 = AnalogIn(ADS0,ADS.P2) #動作テスト用設定 テスト時は上２行をコメントアウト
 
 timesecond = 5 #測定間隔(sec)   2,3,4,5,6,10,15,20,30,
 AccelFreq  = 1 #加速度記録の頻度(min) 1,2,3,4,5,6,10,12,15,20,30
@@ -111,8 +112,11 @@ class DB:
     def WriteAll(self):
         cur = connection.cursor()
         printData()
-        cur.execute("INSERT INTO test (Time,EnvTemp,EnvHum,EnvPress,AirPress,ChillFlow,ChillTemp,MotorRPM,AirPressRaw,ChillFlowRaw,ChillTempRaw) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-            (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Air.PressRaw,Water.ChillFlowRaw,Water.ChillTempRaw))
+
+        cur.execute("INSERT INTO test (EnvTime,EnvTemp,EnvHum,EnvPress,AirPress,ChillFlow,ChillTemp,MotorRPM,OilPress) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press,Air.Press,Water.ChillFlow,Water.ChillTemp,Motor.RPM,Oil.Press))
+ 
+
         connection.commit()
 
     def WriteAccel(self):
@@ -158,17 +162,17 @@ class Water:
             self.TimeStamp = datetime.datetime.now()
             self.ChillFlowRaw = WaterFlow1.voltage
             self.ChillTempRaw = WaterTemp1.voltage 
-            self.ChillFlow = round(self.ChillFlowRaw * 208.33333 - 125,3)
-            self.ChillTemp = round(self.ChillTempRaw * 58.33333 - 55,3)
+            self.ChillFlow = round(self.ChillFlowRaw * 209.7315 - 125,3)
+            self.ChillTemp = round(self.ChillTempRaw * 58.72483 - 55,3)
         except:
-            self.ChillFlow = 9999.999
-            self.ChillTemp = 9999.999
+            self.ChillFlow = 9999.99
+            self.ChillTemp = 9999.99
 
 class Air:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
-        self.PressRaw = 9999.999
-        self.Press = 9999.999
+        self.PressRaw = 9999.99
+        self.Press = 9999.99
 
     def Read(self):
         try:
@@ -176,19 +180,19 @@ class Air:
             self.PressRaw = AirPress1.voltage
             self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 3)
         except:
-            self.Press = 9999.999
+            self.Press = 9999.99
 
 class Oil:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
-        self.PressRaw = 9999.999
-        self.Press = 9999.999
+        self.PressRaw = 9999.99
+        self.Press = 9999.99
 
     def Read(self):
         try:
             self.TimeStamp = datetime.datetime.now()
-            self.PressRaw = AirPress1.voltage
-            self.Press = round((self.PressRaw * 1.524796) * 0.25 - 0.25, 3)
+            self.PressRaw = OilPress1.voltage
+            self.Press = round(self.PressRaw * 20.97315 -12.5,3)
         except:
             self.Press = 9999.999
 
@@ -382,6 +386,10 @@ def printData():
     print("Air Press       : %0.2f" % Air.Press)
     print("Air Press RAW   : %0.2f" % Air.PressRaw)
 
+    print("Oil TimeStamp   : %s" % Oil.TimeStamp)
+    print("Oil Press       : %0.2f" % Oil.Press)
+    print("Oil Press RAW   : %0.2f" % Oil.PressRaw)
+
     print("Chill TimeStamp : %s" % Water.TimeStamp)
     print("Chill Flow      : %0.2f" % Water.ChillFlow)
     print("Chill Flow RAW  : %0.2f" % Water.ChillFlowRaw)
@@ -397,10 +405,11 @@ def printData():
     display.text("%s" % displaytime ,0,0,1)
     display.text("EnvTemp   : %0.2f'C" % BME280.Temp,0,12,1)
     display.text("EnvHum    : %0.2f%%" % BME280.Hum,0,20,1)
-    display.text("EnvPress  : %0.0fHPa" % BME280.Press,0,28,1)
-    display.text("AirPress  : %0.2fMPa" % Air.Press,0,36,1)
-    display.text("ChillFlow : %0.2fL/m" % Water.ChillFlow,0,44,1)
-    display.text("ChillTemp : %0.2f'C" % Water.ChillTemp,0,52,1)
+#    display.text("EnvPress  : %0.0fHPa" % BME280.Press,0,28,1)
+    display.text("AirPress  : %0.2fMPa" % Air.Press,0,28,1)
+    display.text("ChillFlow : %0.2fL/m" % Water.ChillFlow,0,36,1)
+    display.text("ChillTemp : %0.2f'C" % Water.ChillTemp,0,44,1)
+    display.text("OilTemp   : %0.2fMPa" % Oil.Press,0,52,1)
     try:
         display.show()
     except:
@@ -434,6 +443,7 @@ while True:
         print(datetime.datetime.now())
         BME280.Read()
         Air.Read()
+        Oil.Read()
         Water.Read()
         Motor.Read()
         print(datetime.datetime.now())
