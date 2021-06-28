@@ -98,7 +98,7 @@ void DCRemoval(double *vData, uint16_t samples){
 }
 
 
-void DataSend(){
+void RPMSend(){
     Serial.println(x);
     M5.Lcd.print("RPM = ");
     M5.Lcd.println(x); 
@@ -106,6 +106,20 @@ void DataSend(){
     M5.Lcd.println("finish.");
     digitalWrite(LED_PIN, LED_OFF);
     M5.Lcd.println("Wait Commnad.");
+}
+
+void AccelSend(){
+    Serial.println(SAMPLE_SIZE);
+    Serial.println(mesureNum);
+    M5.Lcd.println("Data sending");
+    for (int i = 0; i < SAMPLE_SIZE; i++){
+        Serial.println(samplingTime[i]);
+        Serial.println(ax[i]);
+        Serial.println(ay[i]);
+        Serial.println(az[i]);
+    }
+    M5.Lcd.println("finish.");
+    digitalWrite(LED_PIN, LED_OFF);
 }
 
 void setup() {
@@ -146,11 +160,10 @@ void setup() {
 
 }
 
+
+
 void loop() {
     int Command = 0;
-
-
-
     if(Serial.available()){
         digitalWrite(LED_PIN, LED_ON);
         Command = Serial.read();
@@ -167,7 +180,11 @@ void loop() {
             FFT.ComplexToMagnitude();
             x = FFT.MajorPeak();
 //            M5.Lcd.print("Peak: ");
-            DataSend();     
+            RPMSend();     
+        }
+        if(Command == 2){
+            getAccel();
+            AccelSend();
         }
     }
     delay(1000);
