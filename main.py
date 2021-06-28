@@ -10,6 +10,7 @@
 #Ver 1.3.0 csv出力追加
 #ver 1.4.0 Oilpress 追加
 #ver 1.4.1 csv出力修正
+#ver 1.5.0 m5stickc RPM meter
 
 from typing import ClassVar
 import pymysql.cursors
@@ -24,7 +25,23 @@ import serial
 import subprocess
 import adafruit_ssd1306
 import csv
+from socket import socket, AF_INET, SOCK_DGRAM
+from contextlib import closing
+import datetime
 
+#WiFi UDP setting
+HOST      = '192.168.4.1'
+raspiPORT = 5001
+m5ADDRESS = "192.168.4.100"
+m5PORT    = 5000
+
+s = socket(AF_INET, SOCK_DGRAM)
+s.settimeout(0.8)
+s.bind((HOST, raspiPORT))
+
+
+
+#CSV save to 
 path = "/home/pi/Workspace/Data/"
 
 #i2c 設定
@@ -202,37 +219,21 @@ class Motor:
     def __init__(self):
         self.TimeStamp = datetime.datetime.now()
         self.RPM = 0
-        self.RPMRaw = b""
+
     def Read(self):
-        if ConnectMode == 1:
-            print("USB Read")
-            ser = serial.Serial("/dev/ttyUSB0",115200,timeout = 2.0)
-            try:
-                #前回通信時のバッファをクリア
-                ser.reset_input_buffer()
-                ser.reset_output_buffer()
+        self.TimeStamp = datetime.datetime.now()
+        msg = "mes"
+        s.sendto(msg.encode(),(m5ADDRESS,m5PORT))
+        try:
+            msg, address = s.recvfrom(4096)
+            msg = msg.decode()
+            self.RPM = float(msg)
+        except:
+            msg = "timeout"
+            address = "none"
+            self.RPM = 9999.99
+        print(f"message: {msg}\nfrom:{address}")
 
-                #M5StickCにコマンドを送信 1 で測定開始
-                print("send command to M5StickC")
-                Command = 1
-                CommandByte=bytes([Command])
-                ser.write(CommandByte)
-                self.RPMRaw = ser.readline()
-                print(self.RPMRaw)
-                ser.reset_input_buffer()
-                ser.reset_output_buffer()
-                ser.close()
-                print("USB connection release")
-            
-            except:
-                print("cant open")
-                self.RPM = 9999.999
-                return
-
-
-            print(self.RPMRaw)
-            self.RPM = float(repr(self.RPMRaw.decode())[1:-5])
-        print("RPM = " + str(self.RPM))
 
 
 class Accel:
@@ -404,13 +405,14 @@ def printData():
  
     display.fill(0)
     display.text("%s" % displaytime ,0,0,1)
-    display.text("EnvTemp   : %0.2f'C" % BME280.Temp,0,12,1)
-    display.text("EnvHum    : %0.2f%%" % BME280.Hum,0,20,1)
+    display.text("EnvTemp   : %0.2f'C" % BME280.Temp,0,8,1)
+    display.text("EnvHum    : %0.2f%%" % BME280.Hum,0,16,1)
 #    display.text("EnvPress  : %0.0fHPa" % BME280.Press,0,28,1)
-    display.text("AirPress  : %0.2fMPa" % Air.Press,0,28,1)
-    display.text("ChillFlow : %0.2fL/m" % Water.ChillFlow,0,36,1)
-    display.text("ChillTemp : %0.2f'C" % Water.ChillTemp,0,44,1)
-    display.text("OilTemp   : %0.2fMPa" % Oil.Press,0,52,1)
+    display.text("AirPress  : %0.2fMPa" % Air.Press,0,24,1)
+    display.text("ChillFlow : %0.2fL/m" % Water.ChillFlow,0,32,1)
+    display.text("ChillTemp : %0.2f'C" % Water.ChillTemp,0,40,1)
+    display.text("OilTemp   : %0.2fMPa" % Oil.Press,0,48,1)
+    display.text("Moter RPM : %0.2fRPM" % Motor.RPM,0,56,1)
     try:
         display.show()
     except:
