@@ -64,8 +64,8 @@ except:
 #ADS1115 インスタンス ADS0 24V系 P0:チラー流量 P1:チラー温度 P2:未使用 P3:未使用
 #ADS1115 インスタンス ADS1 24V系 P0:エア圧 P1-3:未使用
 ADS0 = ADS.ADS1115(i2c,gain = 1,address = 0x48)
-WaterFlow1 = AnalogIn(ADS0,ADS.P0)
-WaterTemp1 = AnalogIn(ADS0,ADS.P1)
+WaterFlow1 = AnalogIn(ADS0,ADS.P2)  # defo P0
+WaterTemp1 = AnalogIn(ADS0,ADS.P3)  # defo P1
 ADS1 = ADS.ADS1115(i2c,gain = 1,address = 0x49)
 AirPress1 = AnalogIn(ADS1,ADS.P0) 
 OilPress1 = AnalogIn(ADS1,ADS.P2)
@@ -115,17 +115,17 @@ class DB:
         print("DB init")
         self.count = 1
 
-    def WriteAll(self):
-        print("db write")
+#    def WriteAll(self):
+#        print("db write")
 #        TimeStamp = str(datetime.datetime.now())
 #        DB.WriteAccel()
 #        connection.ping(reconnect = True)
-        cur = connection.cursor()
-        cur.execute("INSERT INTO Environment (Time,Temp,Hum,Press) VALUES(%s,%s,%s,%s)",
-            (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press))
-        cur.execute("INSERT INTO Air (Time,Press) VALUES(%s,%s)",(Air.TimeStamp,Air.Press))
-        cur.execute("INSERT INTO Water (Time,ChillFlow,ChillTemp) VALUES(%s,%s,%s)",(Water.TimeStamp,Water.ChillFlow,Water.ChillTemp))
-        connection.commit()
+#        cur = connection.cursor()
+#        cur.execute("INSERT INTO Environment (Time,Temp,Hum,Press) VALUES(%s,%s,%s,%s)",
+#            (BME280.TimeStamp,BME280.Temp,BME280.Hum,BME280.Press))
+#        cur.execute("INSERT INTO Air (Time,Press) VALUES(%s,%s)",(Air.TimeStamp,Air.Press))
+#        cur.execute("INSERT INTO Water (Time,ChillFlow,ChillTemp) VALUES(%s,%s,%s)",(Water.TimeStamp,Water.ChillFlow,Water.ChillTemp))
+#        connection.commit()
 
     def WriteAll(self):
         cur = connection.cursor()
@@ -426,7 +426,7 @@ Accel = Accel()
 DB = DB()
 Motor = Motor()
 Oil = Oil()
-CSV = CSV()
+#CSV = CSV()
 
 lastMesure = 0
 lastSecond = 0
@@ -435,10 +435,10 @@ lastSecond = 0
 
 
 while True:
-    if CSV.today != datetime.date.today():
-        CSV.today = datetime.date.today()
-        CSV.filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.csv")
-        print("savefile : " + CSV.filename)
+#    if CSV.today != datetime.date.today():
+#        CSV.today = datetime.date.today()
+#        CSV.filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.csv")
+#        print("savefile : " + CSV.filename)
 
     if (datetime.datetime.now().second % timesecond == 0) & (datetime.datetime.now().second != lastSecond):
         lastSecond = datetime.datetime.now().second
@@ -451,7 +451,7 @@ while True:
         Motor.Read()
         print(datetime.datetime.now())
         DB.WriteAll()
-        CSV.WriteAll()
+        #CSV.WriteAll()
         #print(datetime.datetime.now())
         #printData()
 
